@@ -1,0 +1,70 @@
+name: Build and Promote FastAPI App
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image tag
+        id: meta
+        run: echo "version=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+
+  deploy-dev:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Deploy to Dev
+        run: |
+          echo "Deploying ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }} to DEV"
+          # Add your dev deployment command here (e.g., kubectl set image, ssh, aws ecs, etc.)
+
+  promote-qa:
+    needs: [build-and-push, deploy-dev]
+    runs-on: ubuntu-latest
+    environment: qa
+    steps:
+      - name: Promote and Deploy to QA
+        run: |
+          echo "Promoting ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }} to QA"
+          # Add your QA deployment command here
+
+  promote-prod:
+    needs: [build-and-push, promote-qa]
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Promote and Deploy to Prod
+        run: |
+          echo "Promoting ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }} to PROD"
+          # Add your Prod deployment command here
