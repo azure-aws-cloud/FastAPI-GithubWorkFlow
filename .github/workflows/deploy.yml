@@ -1,9 +1,13 @@
-name: Build and Promote FastAPI App
+name: Manual Build and Promote FastAPI App
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      deploy_notes:
+        description: 'Deployment / Release Notes'
+        required: false
+        default: 'Manual release'
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -46,25 +50,53 @@ jobs:
     steps:
       - name: Deploy to Dev
         run: |
+          echo "Notes: ${{ inputs.deploy_notes }}"
           echo "Deploying ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }} to DEV"
-          # Add your dev deployment command here (e.g., kubectl set image, ssh, aws ecs, etc.)
+
+  approve-qa:
+    needs: [build-and-push, deploy-dev]
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Wait for QA Approval
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: <your-github-username>
+          minimum-approvals: 1
+          issue-title: "Approve QA Promotion: ${{ needs.build-and-push.outputs.image_tag }}"
+          issue-body: "Review Dev deployment. Reply with your approval comment (e.g., 'approved - tested in dev') or 'deny' to abort."
 
   promote-qa:
-    needs: [build-and-push, deploy-dev]
+    needs: [build-and-push, approve-qa]
     runs-on: ubuntu-latest
     environment: qa
     steps:
       - name: Promote and Deploy to QA
         run: |
           echo "Promoting ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }} to QA"
-          # Add your QA deployment command here
+
+  approve-prod:
+    needs: [build-and-push, promote-qa]
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Wait for Prod Approval
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: <your-github-username>
+          minimum-approvals: 1
+          issue-title: "Approve PROD Promotion: ${{ needs.build-and-push.outputs.image_tag }}"
+          issue-body: "Review QA deployment. Reply with your approval comment (e.g., 'approved - ready for prod') or 'deny' to abort."
 
   promote-prod:
-    needs: [build-and-push, promote-qa]
+    needs: [build-and-push, approve-prod]
     runs-on: ubuntu-latest
     environment: prod
     steps:
       - name: Promote and Deploy to Prod
         run: |
           echo "Promoting ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.image_tag }} to PROD"
-          # Add your Prod deployment command here
