@@ -64,7 +64,7 @@ jobs:
         uses: trstringer/manual-approval@v1
         with:
           secret: ${{ github.TOKEN }}
-          approvers: <your-github-username>
+          approvers: azure-aws-cloud
           minimum-approvals: 1
           issue-title: "Approve QA Promotion: ${{ needs.build-and-push.outputs.image_tag }}"
           issue-body: "Review Dev deployment. Reply with your approval comment (e.g., 'approved - tested in dev') or 'deny' to abort."
